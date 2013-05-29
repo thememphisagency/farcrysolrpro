@@ -840,6 +840,8 @@
 			);
 			if (structKeyExists(pathInfo,"fullPath")) {
 				return pathInfo.fullPath;
+			} else if (structKeyExists(application.fapi.getContentTypeMetadata(typename=arguments.stObject.typename), "bFullPathStored") AND application.fapi.getContentTypeMetadata(typename=arguments.stObject.typename)['bFullPathStored'] EQ true) {
+				return arguments.stObject.filename;
 			} else {
 				// it wasn't found, try and cobble something together
 				return application.path.defaultfilepath & arguments.stObject[arguments.propertyName];
