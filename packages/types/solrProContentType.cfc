@@ -365,229 +365,238 @@
 		
 		<!--- load the record from the database --->
 		<cfset var stRecord = application.fapi.getContentObject(typename = arguments.typename, objectid = arguments.objectid) />
-		
-		<!--- each record in Solr should track the application name --->
-		<cfset stRecord["fcsp_sitename"] = application.applicationName />
 
-		<!--- set a unique id --->
-		<cfset stRecord["fcsp_id"] = application.applicationName & "_" & stRecord.objectid />
-		
-		<!--- create a solr object for this record --->
-		<cfset var doc = [] />
-		<cfset var field = "" />
-		<cfloop collection="#stRecord#" item="field">
+		<!--- Check if we should index the content of the file --->
+		<cfset var bIndexContent = NOT structKeyExists(stRecord, "bIndexContent") OR (structKeyExists(stRecord, "bIndexContent") AND stRecord.bIndexContent) />
+
+		<!--- Don't index if user has chosen to skip file  --->
+		<cfset var bContinue = NOT structKeyExists(stRecord, "bIndexFile") OR (structKeyExists(stRecord, "bIndexFile") AND stRecord.bIndexFile) />
+
+		<cfif bContinue>				
+			<!--- each record in Solr should track the application name --->
+			<cfset stRecord["fcsp_sitename"] = application.applicationName />
+
+			<!--- set a unique id --->
+			<cfset stRecord["fcsp_id"] = application.applicationName & "_" & stRecord.objectid />
 			
-			<!--- only add field if its a core property or an indexed field --->
-			<cfif hasIndexedProperty(arguments.stContentType.objectid, field) or arrayFindNoCase(aCoreFields, field)>
+			<!--- create a solr object for this record --->
+			<cfset var doc = [] />
+			<cfset var field = "" />
+			<cfloop collection="#stRecord#" item="field">
 				
-				<cfif arrayFindNoCase(aCoreFields, field)>
+				<!--- only add field if its a core property or an indexed field --->
+				<cfif hasIndexedProperty(arguments.stContentType.objectid, field) or arrayFindNoCase(aCoreFields, field)>
 					
-					<!--- core property --->
-				
-					<!--- if this is a legit FC property then set the farcryField, otherwise leave it blank --->
-					<cfif listFindNoCase(lFarCryProps, field)>
+					<cfif arrayFindNoCase(aCoreFields, field)>
 						
-						<cfset arrayAppend(doc, {
-							name = lcase(field),
-							value = stRecord[field],
-							farcryField = field
-						}) />
+						<!--- core property --->
+					
+						<!--- if this is a legit FC property then set the farcryField, otherwise leave it blank --->
+						<cfif listFindNoCase(lFarCryProps, field)>
+							
+							<cfset arrayAppend(doc, {
+								name = lcase(field),
+								value = stRecord[field],
+								farcryField = field
+							}) />
+							
+						<cfelse>
+							
+							<cfset arrayAppend(doc, {
+								name = lcase(field),
+								value = stRecord[field],
+								farcryField = ""
+							}) />
+							
+						</cfif>
 						
 					<cfelse>
 						
-						<cfset arrayAppend(doc, {
-							name = lcase(field),
-							value = stRecord[field],
-							farcryField = ""
-						}) />
+						<!--- custom property --->
 						
-					</cfif>
-					
-				<cfelse>
-					
-					<!--- custom property --->
-					
-					<!--- load the indexing metadata for this property --->
-					<cfset var stSolrPropData = arguments.oIndexedProperty.getByContentTypeAndFieldname(contentTypeId = arguments.stContentType.objectid, fieldName = field) />
-					<cfset var aFieldTypes = listToArray(stSolrPropData.lFieldTypes,",") />
-					<cfset var ft = "" />
-					<cfloop array="#aFieldTypes#" index="ft">
-						
-						<cfset var typeSetup = {
-							fieldType = listGetAt(ft,1,":"),
-							bStored = listGetAt(ft,2,":"),
-							boostValue = listGetAt(ft,3,":")
-						} />
-						
-						<cfif typeSetup.fieldType eq "date">
-							<cfif isDate(stRecord[field])>
+						<!--- load the indexing metadata for this property --->
+						<cfset var stSolrPropData = arguments.oIndexedProperty.getByContentTypeAndFieldname(contentTypeId = arguments.stContentType.objectid, fieldName = field) />
+						<cfset var aFieldTypes = listToArray(stSolrPropData.lFieldTypes,",") />
+						<cfset var ft = "" />
+						<cfloop array="#aFieldTypes#" index="ft">
+							
+							<cfset var typeSetup = {
+								fieldType = listGetAt(ft,1,":"),
+								bStored = listGetAt(ft,2,":"),
+								boostValue = listGetAt(ft,3,":")
+							} />
+							
+							<cfif typeSetup.fieldType eq "date">
+								<cfif isDate(stRecord[field])>
+									<cfset arrayAppend(doc, {
+										name = lcase(field) & "_" & typeSetup.fieldType & "_" & ((typeSetup.bStored eq 1) ? "stored" : "notstored"),
+										value = stRecord[field],
+										boost = typeSetup.boostValue,
+										farcryField = field
+									}) />
+								</cfif>
+							<cfelse>
 								<cfset arrayAppend(doc, {
 									name = lcase(field) & "_" & typeSetup.fieldType & "_" & ((typeSetup.bStored eq 1) ? "stored" : "notstored"),
 									value = stRecord[field],
 									boost = typeSetup.boostValue,
 									farcryField = field
-								}) />
+								}) />	
 							</cfif>
-						<cfelse>
-							<cfset arrayAppend(doc, {
-								name = lcase(field) & "_" & typeSetup.fieldType & "_" & ((typeSetup.bStored eq 1) ? "stored" : "notstored"),
-								value = stRecord[field],
-								boost = typeSetup.boostValue,
-								farcryField = field
-							}) />	
-						</cfif>
-						
-						<cfscript>
-							// if this field is an image or file field, parse the contents
-							var ftType = getFTTypeForProperty(arguments.typename,field);
-							if (listFindNoCase("image,file",ftType) && len(trim(stRecord[field]))) {
 							
-								if (ftType eq "image") {
-									var filePath = expandPath(application.fapi.getImageWebroot() & stRecord[field]);
-								} else {
-									var filePath = getFilePathForProperty(stRecord, field);
-								}
+							<cfscript>
+								// if this field is an image or file field, parse the contents
+								var ftType = getFTTypeForProperty(arguments.typename,field);
 
-								if (fileExists(filePath)) {
+								if (listFindNoCase("image,file",ftType) && len(trim(stRecord[field])) AND bIndexContent) {
 								
-									// parse and save the value
-									var parsedValue = parseFile(filePath = filePath);
-									arrayAppend(doc, {
-										"name" = lcase(field) & "_contents_" & typeSetup.fieldType & "_" & ((typeSetup.bStored eq 1) ? "stored" : "notstored"),
-										"value" = parsedValue,
-										"boost" = typeSetup.boostValue,
-										"farcryField" = field
-									});
+									if (ftType eq "image") {
+										var filePath = expandPath(application.fapi.getImageWebroot() & stRecord[field]);
+									} else {
+										var filePath = getFilePathForProperty(stRecord, field);
+									}
+								
+									if (fileExists(filePath)) {
 									
-									// save parsed value to stRecord so we can use it to build the "highlight" summary
-									stRecord[field & "_contents"] = parsedValue;
+										// parse and save the value
+										var parsedValue = parseFile(filePath = filePath);
 
+										arrayAppend(doc, {
+											"name" = lcase(field) & "_contents_" & typeSetup.fieldType & "_" & ((typeSetup.bStored eq 1) ? "stored" : "notstored"),
+											"value" = parsedValue,
+											"boost" = typeSetup.boostValue,
+											"farcryField" = field
+										});
+										
+										// save parsed value to stRecord so we can use it to build the "highlight" summary
+										stRecord[field & "_contents"] = parsedValue;
+
+									}
+									
 								}
-								
-							}
-						</cfscript>
+							</cfscript>
+							
+						</cfloop>
 						
-					</cfloop>
-					
+					</cfif>
+						
 				</cfif>
-					
+				
+			</cfloop>
+
+			<!--- grab any related rule records and index those as well (if we are indexing rules for this content type) --->
+			<cfif listLen(arguments.stContentType.lIndexedRules)>
+				<cfset var ruleContent = getRuleContent(objectid = arguments.objectid, lRuleTypes = arguments.stContentType.lIndexedRules) />
+				<cfset arrayAppend(doc, {
+				 	name = "fcsp_rulecontent", 
+				 	value = ruleContent,
+				 	farcryField = ""
+				}) />
+				<cfset arrayAppend(doc, {
+				 	name = "fcsp_rulecontent_phonetic", 
+				 	value = ruleContent,
+				 	farcryField = "" 
+				}) />
 			</cfif>
 			
-		</cfloop>
-
-		<!--- grab any related rule records and index those as well (if we are indexing rules for this content type) --->
-		<cfif listLen(arguments.stContentType.lIndexedRules)>
-			<cfset var ruleContent = getRuleContent(objectid = arguments.objectid, lRuleTypes = arguments.stContentType.lIndexedRules) />
-			<cfset arrayAppend(doc, {
-			 	name = "fcsp_rulecontent", 
-			 	value = ruleContent,
-			 	farcryField = ""
-			}) />
-			<cfset arrayAppend(doc, {
-			 	name = "fcsp_rulecontent_phonetic", 
-			 	value = ruleContent,
-			 	farcryField = "" 
-			}) />
-		</cfif>
-		
-		<!--- if we are building a summary field, grab that data as well --->
-		<cfset var lSummaryFields = arguments.stContentType.lSummaryFields />
-		<cfset var f = "" />
-		<cfloop list="#lSummaryFields#" index="f">
-			<cfif structKeyExists(stRecord, f)>
-				<cfset arrayAppend(doc, {
-					name = "fcsp_highlight",
-					value = application.stPlugins.farcrysolrpro.oCustomFunctions.tagStripper(stRecord[f]),
-					farcryField = ""
-				}) />
-			</cfif>
-			<cfif structKeyExists(stRecord, f & "_contents")>
-				<!--- we have file contents for this field, index it as well --->
-				<cfset arrayAppend(doc, {
-					name = "fcsp_highlight",
-					value = application.stPlugins.farcrysolrpro.oCustomFunctions.tagStripper(stRecord[f & "_contents"]),
-					farcryField = ""
-				}) />
-			</cfif>
-		</cfloop>
-		
-		<!--- note whether or not this record should be included in the site-wide search --->
-		<cfset arrayAppend(doc, {
-			name = "fcsp_benablesearch",
-			value = javacast("boolean",stContentType.bEnableSearch),
-			farcryField = ""
-		}) />
-
-		<!--- calculate the document size (fcsp_documentsize) --->
-		<cfset var docSize = 0 />
-		<cfif len(trim(arguments.stContentType.lDocumentSizeFields))>
-			<cfset var docSizeField = "" />
-			<cfloop list="#arguments.stContentType.lDocumentSizeFields#" index="docSizeField">
-				<cfif len(trim(stRecord[docSizeField]))>
-					<cfset var docSizeFtType = getFtTypeForProperty(typename = stRecord.typename, propertyName = docSizeField) />
-					<cfswitch expression="#docSizeFtType#">
-						<cfcase value="file,image">
-							<!--- get the size of the file --->
-							<cfif docSizeFtType eq "file">
-								<cfset var fp = getFilePathForProperty(stRecord, docSizeField) />
-							<cfelse>
-								<cfset var fp = expandPath(application.fapi.getImageWebroot() & stRecord[docSizeField]) />
-							</cfif>
-							<cfif fileExists(fp)>
-								<cfset docSize+= createObject("java","java.io.File").init(fp).length() />
-							</cfif>
-						</cfcase>
-						<cfdefaultcase>
-							<cfset docSize+= len(stRecord[docSizeField]) />
-						</cfdefaultcase>
-					</cfswitch>
+			<!--- if we are building a summary field, grab that data as well --->
+			<cfset var lSummaryFields = arguments.stContentType.lSummaryFields />
+			<cfset var f = "" />
+			<cfloop list="#lSummaryFields#" index="f">
+				<cfif structKeyExists(stRecord, f)>
+					<cfset arrayAppend(doc, {
+						name = "fcsp_highlight",
+						value = application.stPlugins.farcrysolrpro.oCustomFunctions.tagStripper(stRecord[f]),
+						farcryField = ""
+					}) />
+				</cfif>
+				<cfif structKeyExists(stRecord, f & "_contents")>
+					<!--- we have file contents for this field, index it as well --->
+					<cfset arrayAppend(doc, {
+						name = "fcsp_highlight",
+						value = application.stPlugins.farcrysolrpro.oCustomFunctions.tagStripper(stRecord[f & "_contents"]),
+						farcryField = ""
+					}) />
 				</cfif>
 			</cfloop>
-		</cfif>
-		<cfset arrayAppend(doc, {
-			name = "fcsp_documentsize",
-			value = javacast("int",docSize),
-			farcryField = ""
-		}) />
+			
+			<!--- note whether or not this record should be included in the site-wide search --->
+			<cfset arrayAppend(doc, {
+				name = "fcsp_benablesearch",
+				value = javacast("boolean",stContentType.bEnableSearch),
+				farcryField = ""
+			}) />
 
-		<cfscript>
-			// handle any custom field mapping for this type
-			var oType = application.fapi.getContentType(arguments.typename);
-			if (structKeyExists(oType,"mapSolrFields")) {
-				doc = oType.mapSolrFields(stObject = stRecord, fields = doc);
-			}
-		</cfscript>
-		
-		<!--- add core boost values to document --->
-		<cfset var i = "" />
-		<cfloop array="#doc#" index="i">
-			<cfif structKeyExists(stPropBoosts, i.name) and not structKeyExists(i,"boost")>
-				<cfset i.boost = stPropBoosts[i.name] />
-			<cfelseif not structKeyExists(i,"boost")>
-				<cfset i.boost = application.fapi.getConfig(key = 'solrserver', name = 'defaultBoost', default = 5) />
+			<!--- calculate the document size (fcsp_documentsize) --->
+			<cfset var docSize = 0 />
+			<cfif len(trim(arguments.stContentType.lDocumentSizeFields))>
+				<cfset var docSizeField = "" />
+				<cfloop list="#arguments.stContentType.lDocumentSizeFields#" index="docSizeField">
+					<cfif len(trim(stRecord[docSizeField]))>
+						<cfset var docSizeFtType = getFtTypeForProperty(typename = stRecord.typename, propertyName = docSizeField) />
+						<cfswitch expression="#docSizeFtType#">
+							<cfcase value="file,image">
+								<!--- get the size of the file --->
+								<cfif docSizeFtType eq "file">
+									<cfset var fp = getFilePathForProperty(stRecord, docSizeField) />
+								<cfelse>
+									<cfset var fp = expandPath(application.fapi.getImageWebroot() & stRecord[docSizeField]) />
+								</cfif>
+								<cfif fileExists(fp)>
+									<cfset docSize+= createObject("java","java.io.File").init(fp).length() />
+								</cfif>
+							</cfcase>
+							<cfdefaultcase>
+								<cfset docSize+= len(stRecord[docSizeField]) />
+							</cfdefaultcase>
+						</cfswitch>
+					</cfif>
+				</cfloop>
 			</cfif>
-		</cfloop>
-		
-		<!--- check if this record has a document level boost --->
-		<cfset var docBoost = arguments.oDocumentBoost.getBoostValueForDocument(documentId = stRecord.objectid) />
-		
-		<!--- if there was no boost for the specific document, grab the default specified for the content type --->
-		<cfif not isNumeric(docBoost)>
-			<cfset docBoost = arguments.stContentType.defaultDocBoost />
+			<cfset arrayAppend(doc, {
+				name = "fcsp_documentsize",
+				value = javacast("int",docSize),
+				farcryField = ""
+			}) />
+
+			<cfscript>
+				// handle any custom field mapping for this type
+				var oType = application.fapi.getContentType(arguments.typename);
+				if (structKeyExists(oType,"mapSolrFields")) {
+					doc = oType.mapSolrFields(stObject = stRecord, fields = doc);
+				}
+			</cfscript>
+			
+			<!--- add core boost values to document --->
+			<cfset var i = "" />
+			<cfloop array="#doc#" index="i">
+				<cfif structKeyExists(stPropBoosts, i.name) and not structKeyExists(i,"boost")>
+					<cfset i.boost = stPropBoosts[i.name] />
+				<cfelseif not structKeyExists(i,"boost")>
+					<cfset i.boost = application.fapi.getConfig(key = 'solrserver', name = 'defaultBoost', default = 5) />
+				</cfif>
+			</cfloop>
+			
+			<!--- check if this record has a document level boost --->
+			<cfset var docBoost = arguments.oDocumentBoost.getBoostValueForDocument(documentId = stRecord.objectid) />
+			
+			<!--- if there was no boost for the specific document, grab the default specified for the content type --->
+			<cfif not isNumeric(docBoost)>
+				<cfset docBoost = arguments.stContentType.defaultDocBoost />
+			</cfif>
+			
+			<!--- add it to solr --->
+			<cfset var args = { doc = doc, typename = stRecord.typename } />
+			<cfif isNumeric(docBoost)>
+				<cfset args.docBoost = docBoost />
+			</cfif>
+			<cfset add(argumentCollection = args) />
+			
+			<!--- optionally, commit --->
+			<cfif arguments.bCommit>
+				<cfset commit() />
+			</cfif>
 		</cfif>
-		
-		<!--- add it to solr --->
-		<cfset var args = { doc = doc, typename = stRecord.typename } />
-		<cfif isNumeric(docBoost)>
-			<cfset args.docBoost = docBoost />
-		</cfif>
-		<cfset add(argumentCollection = args) />
-		
-		<!--- optionally, commit --->
-		<cfif arguments.bCommit>
-			<cfset commit() />
-		</cfif>
-		
 	</cffunction>
 	
 	<cffunction name="getRecordsToIndex" returntype="struct" access="public" output="false" hint="Get the records to index for a given content type">
@@ -872,11 +881,13 @@
 			);
 			if (structKeyExists(pathInfo,"fullPath")) {
 				return pathInfo.fullPath;
-			} else if (structKeyExists(application.fapi.getContentTypeMetadata(typename=arguments.stObject.typename), "bFullPathStored") AND application.fapi.getContentTypeMetadata(typename=arguments.stObject.typename)['bFullPathStored'] EQ true) {
+			} else if (structKeyExists(application.fapi.getContentTypeMetadata(typename=arguments.stObject.typename), "bIncludeInIndex") 
+				AND application.fapi.getContentTypeMetadata(typename=arguments.stObject.typename)['bIncludeInIndex'] EQ true
+				AND fileExists(arguments.stObject.filename)) {			
 				return arguments.stObject.filename;
-			} else {
+			} else {	
 				// it wasn't found, try and cobble something together
-				return application.path.defaultfilepath & arguments.stObject[arguments.propertyName];
+				return arguments.stObject[arguments.propertyName];
 			}
 		</cfscript>
 	</cffunction>
