@@ -262,8 +262,8 @@
 			 @version 1, December 5, 2012 
 			*/
 			var result = [];
-			for (var item in arguments.aObj) {
-				arrayAppend(result, item[arguments.key]);
+			for(var i=1; i<=arraylen(arguments.aObj);i++){
+				arrayAppend(result,arguments.aObj[i][arguments]);
 			}
 			return result;
 		</cfscript>	
