@@ -265,7 +265,7 @@
 		<cfargument name="bFlushCache" type="boolean" required="false" default="false" />
 		<cfset var q = getAllContentTypes(lContentTypes) />
 		<cfset var qf = "" />
-		
+
 		<!--- for each indexed content type, get the field list --->
 		<cfloop query="q">
 			<cfif arguments.bUseCache>
@@ -455,9 +455,8 @@
 									} else {
 										var filePath = getFilePathForProperty(stRecord, field);
 									}
-								
 									if (fileExists(filePath)) {
-									
+										
 										// parse and save the value
 										var parsedValue = parseFile(filePath = filePath);
 
@@ -879,6 +878,7 @@
 				stObject = arguments.stObject,
 				stMetadata = application.fapi.getPropertyMetadata(typename = arguments.stObject.typename, property = arguments.propertyName)
 			);
+
 			if (structKeyExists(pathInfo,"fullPath")) {
 				return pathInfo.fullPath;
 			} else if (structKeyExists(application.fapi.getContentTypeMetadata(typename=arguments.stObject.typename), "bIncludeInIndex") 
@@ -886,8 +886,12 @@
 				AND fileExists(arguments.stObject.filename)) {			
 				return arguments.stObject.filename;
 			} else {	
-				// it wasn't found, try and cobble something together
-				return arguments.stObject[arguments.propertyName];
+				if (left(arguments.stObject[arguments.propertyName],1) EQ '/') {
+					return RemoveChars(arguments.stObject[arguments.propertyName], 1, 1);
+				} else {
+					// it wasn't found, try and cobble something together
+					return arguments.stObject[arguments.propertyName];
+				}
 			}
 		</cfscript>
 	</cffunction>

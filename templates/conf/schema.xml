@@ -132,6 +132,7 @@
 				<tokenizer class="solr.StandardTokenizerFactory"/>
 				<filter class="solr.LowerCaseFilterFactory"/>
 				<filter class="solr.StandardFilterFactory"/>
+        <filter class="solr.StopFilterFactory" ignoreCase="true" words="stopwords.txt"/>
 				<filter class="solr.RemoveDuplicatesTokenFilterFactory"/>
 			</analyzer>
 		</fieldType>
@@ -140,6 +141,7 @@
 				<charFilter class="solr.MappingCharFilterFactory" mapping="mapping-FoldToASCII.txt"/>
 				<tokenizer class="solr.KeywordTokenizerFactory"/>
 				<filter class="solr.LowerCaseFilterFactory"/>
+        <filter class="solr.StopFilterFactory" ignoreCase="true" words="stopwords.txt"/>
 			</analyzer>
 		</fieldType>
 

@@ -19,6 +19,8 @@
 	<cfproperty ftSeq="335" ftFieldset="Boost Settings" name="defaultDocBoost" type="numeric" ftType="numeric" default="25" ftDefault="25" ftLabel="Default Document Boost Value" required="true" ftHint="The default document boost value.  Default: 25" />
 	
 	<cfproperty ftSeq="410" ftFieldset="Plugin Settings" name="pluginWebRoot" ftLabel="Plugin Web Root" type="nstring" ftType="string" default="/farcrysolrpro" ftDefault="application.fapi.getwebroot() & '/farcrysolrpro'" ftDefaultType="evaluate" required="true" ftValidation="required" ftHint="The url path to the plugin's www directory.  You should create a webserver alias to this directory, or copy the www directory to a 'farcrysolrpro' directory in the webroot." />
+	<cfproperty ftSeq="411" ftFieldset="Plugin Settings" name="lToStore" ftLabel="File types to store" type="nstring" ftType="string" default="*.zip,*.jpg,*.png,*.gif,*.pub" required="true" ftValidation="required" ftHint="A list of file types to include in the index but not have their contents indexed." />
+	<cfproperty ftSeq="412" ftFieldset="Plugin Settings" name="lToIndex" ftLabel="File types to index" type="nstring" ftType="string" default="*.pdf,*.xslx,*.docx,*.xsl,*.doc,*.txt" required="true" ftValidation="required" ftHint="A list of file types to index" />
 	
 	<cfproperty name="bConfigured" type="boolean" ftType="hidden" default="0" required="true" hint="Flag to indicate that the user has configured the Solr server, this avoids creating folders and files using the default settings when FarCry is initialized." />
 		
