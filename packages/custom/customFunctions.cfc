@@ -254,7 +254,7 @@
 		<cfscript>
 			/*
 			 Takes and array of structs and converts it to a simple array using the value of the struct key specified
-			 
+
 			 @param aObj   Array of structs. (Required)
 			 @param key    Key of the struct to get data from. (Required)
 			 @return Returns a simple array of values. 
@@ -262,8 +262,8 @@
 			 @version 1, December 5, 2012 
 			*/
 			var result = [];
-			for(var i=1; i<=arraylen(arguments.aObj);i++){
-				arrayAppend(result,arguments.aObj[i][arguments]);
+			for (var item in arguments.aObj) {
+				arrayAppend(result, item[arguments.key]);
 			}
 			return result;
 		</cfscript>	
